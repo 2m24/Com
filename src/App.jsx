@@ -3,7 +3,7 @@ import { Loader2 } from "lucide-react";
 import Header from "./components/Header";
 import FileUpload from "./components/FileUpload";
 import DocumentPreview from "./components/DocumentPreview";
-import MiniMap from "./components/MiniMap";
+import UnifiedMiniMap from "./components/MiniMap";
 import ComparisonSummary from "./components/ComparisonSummary";
 import DetailedReport from "./components/DetailedReport";
 import { compareDocuments, compareHtmlDocuments } from "./utils/textComparison";
@@ -41,25 +41,21 @@ function App() {
       console.log("Both documents exist, starting comparison...");
       setIsComparing(true);
       
-      // Always use original, unmodified HTML content for comparison
-      // Use setTimeout to allow UI to update before heavy computation
-      setTimeout(() => {
-        try {
-          const result = compareHtmlDocuments(
-            leftDocument.originalHtmlContent,
-            rightDocument.originalHtmlContent
-          );
-          console.log("Comparison result summary:", result.summary);
-          setComparison(result);
-          setViewMode("comparison");
-          console.log("Comparison completed, view mode set to comparison");
-        } catch (error) {
-          console.error("Comparison failed:", error);
-          alert("Failed to compare documents. Please try again with smaller files or contact support.");
-        } finally {
-          setIsComparing(false);
-        }
-      }, 100);
+      // Use async comparison to prevent browser blocking
+      compareHtmlDocuments(
+        leftDocument.originalHtmlContent,
+        rightDocument.originalHtmlContent
+      ).then(result => {
+        console.log("Comparison result summary:", result.summary);
+        setComparison(result);
+        setViewMode("comparison");
+        console.log("Comparison completed, view mode set to comparison");
+      }).catch(error => {
+        console.error("Comparison failed:", error);
+        alert("Failed to compare documents. Please try again with smaller files or contact support.");
+      }).finally(() => {
+        setIsComparing(false);
+      });
     } else {
       console.log("Cannot compare - missing documents");
     }
@@ -182,14 +178,14 @@ function App() {
             />
 
             {/* Document Comparison View */}
-            <div className="grid grid-cols-[1fr_60px_1fr] gap-4 items-stretch">
+            <div className="grid grid-cols-[1fr_80px_1fr] gap-4 items-stretch">
               <DocumentPreview
                 document={leftDocument}
                 diffs={comparison.leftDiffs}
                 title="Original Document"
                 containerId="left-preview-container"
               />
-              <MiniMap
+              <UnifiedMiniMap
                 leftContainerId="left-preview-container"
                 rightContainerId="right-preview-container"
               />

@@ -5,70 +5,68 @@ const CHANGE_SELECTORS = [
   '.git-line-added',
   '.git-line-removed', 
   '.git-line-modified',
+  '.git-line-placeholder',
   '.git-inline-added',
   '.git-inline-removed',
-  '.git-cell-added',
-  '.git-cell-removed',
-  '.git-cell-modified',
-  '.structural-added',
-  '.structural-removed',
-  '.structural-modified'
+  '.placeholder-added',
+  '.placeholder-removed'
 ];
 
-const MiniMap = ({ leftContainerId, rightContainerId }) => {
+const UnifiedMiniMap = ({ leftContainerId, rightContainerId }) => {
   const minimapRef = useRef(null);
   const [markers, setMarkers] = useState([]);
   const [viewport, setViewport] = useState({ top: 0, height: 0 });
-  const [isScrolling, setIsScrolling] = useState(false);
-  const scrollTimeoutRef = useRef(null);
+  const [currentChange, setCurrentChange] = useState(0);
 
   const getContainers = useCallback(() => ({
     left: document.getElementById(leftContainerId),
     right: document.getElementById(rightContainerId)
   }), [leftContainerId, rightContainerId]);
 
-  const collectMarkers = useCallback(() => {
+  const collectUnifiedMarkers = useCallback(() => {
     const { left, right } = getContainers();
     if (!left || !right) return [];
 
     const allMarkers = [];
     
-    // Collect markers from both containers
+    // Collect markers from both containers and unify them
     [left, right].forEach((container, containerIndex) => {
       const side = containerIndex === 0 ? 'left' : 'right';
       const elements = container.querySelectorAll(CHANGE_SELECTORS.join(','));
       
       elements.forEach((element) => {
-        // Get element position relative to container
         const rect = element.getBoundingClientRect();
         const containerRect = container.getBoundingClientRect();
         const relativeTop = rect.top - containerRect.top + container.scrollTop;
         
-        // Calculate position ratio
         const scrollHeight = Math.max(container.scrollHeight, container.clientHeight);
         const ratio = Math.min(1, Math.max(0, relativeTop / scrollHeight));
         
         // Determine change type and color
         let color = '#6b7280';
         let changeType = 'unknown';
+        let priority = 0;
         
         if (element.classList.contains('git-line-added') || 
-            element.classList.contains('git-inline-added') || 
-            element.classList.contains('git-cell-added') ||
-            element.classList.contains('structural-added')) {
+            element.classList.contains('git-inline-added') ||
+            element.classList.contains('placeholder-added')) {
           color = '#10b981';
           changeType = 'added';
+          priority = 3;
         } else if (element.classList.contains('git-line-removed') || 
-                   element.classList.contains('git-inline-removed') || 
-                   element.classList.contains('git-cell-removed') ||
-                   element.classList.contains('structural-removed')) {
+                   element.classList.contains('git-inline-removed') ||
+                   element.classList.contains('placeholder-removed')) {
           color = '#ef4444';
           changeType = 'removed';
-        } else if (element.classList.contains('git-line-modified') || 
-                   element.classList.contains('git-cell-modified') ||
-                   element.classList.contains('structural-modified')) {
+          priority = 3;
+        } else if (element.classList.contains('git-line-modified')) {
           color = '#f59e0b';
           changeType = 'modified';
+          priority = 2;
+        } else if (element.classList.contains('git-line-placeholder')) {
+          color = '#8b5cf6';
+          changeType = 'empty-space';
+          priority = 4;
         }
 
         allMarkers.push({
@@ -77,27 +75,40 @@ const MiniMap = ({ leftContainerId, rightContainerId }) => {
           changeType,
           side,
           element,
-          elementTop: relativeTop
+          elementTop: relativeTop,
+          priority
         });
       });
     });
 
-    // Sort by position and deduplicate nearby markers
+    // Sort by position and deduplicate nearby markers, keeping highest priority
     const sorted = allMarkers.sort((a, b) => a.ratio - b.ratio);
-    const deduped = [];
-    const threshold = 0.008; // Smaller threshold for better precision
+    const unified = [];
+    const threshold = 0.01;
     
     sorted.forEach((marker) => {
-      const existing = deduped.find(m => Math.abs(m.ratio - marker.ratio) <= threshold);
+      const existing = unified.find(m => Math.abs(m.ratio - marker.ratio) <= threshold);
       if (!existing) {
-        deduped.push(marker);
-      } else if (marker.changeType !== 'unknown' && existing.changeType === 'unknown') {
-        const index = deduped.indexOf(existing);
-        deduped[index] = marker;
+        unified.push({
+          ...marker,
+          unified: true,
+          elements: [marker.element]
+        });
+      } else if (marker.priority > existing.priority) {
+        // Replace with higher priority marker
+        const index = unified.indexOf(existing);
+        unified[index] = {
+          ...marker,
+          unified: true,
+          elements: [existing.element, marker.element]
+        };
+      } else {
+        // Add element to existing marker
+        existing.elements.push(marker.element);
       }
     });
 
-    return deduped;
+    return unified;
   }, [getContainers]);
 
   const updateViewport = useCallback(() => {
@@ -126,40 +137,42 @@ const MiniMap = ({ leftContainerId, rightContainerId }) => {
     const { left, right } = getContainers();
     if (!left || !right) return;
 
-    // Calculate target scroll positions
     const leftMaxScroll = Math.max(0, left.scrollHeight - left.clientHeight);
     const rightMaxScroll = Math.max(0, right.scrollHeight - right.clientHeight);
     
     const leftScrollTop = Math.round(leftMaxScroll * targetRatio);
     const rightScrollTop = Math.round(rightMaxScroll * targetRatio);
 
-    // Scroll both containers
     left.scrollTo({ top: leftScrollTop, behavior: 'smooth' });
     right.scrollTo({ top: rightScrollTop, behavior: 'smooth' });
   }, [getContainers]);
 
-  const scrollToElement = useCallback((element) => {
-    if (!element) return;
+  const scrollToElement = useCallback((elements) => {
+    if (!elements || elements.length === 0) return;
     
+    // Use the first element for navigation
+    const element = elements[0];
     element.scrollIntoView({ 
       behavior: 'smooth', 
       block: 'center',
       inline: 'nearest'
     });
     
-    // Add temporary highlight
-    const originalBoxShadow = element.style.boxShadow;
-    const originalTransition = element.style.transition;
-    
-    element.style.transition = 'box-shadow 0.3s ease';
-    element.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.8), 0 0 20px rgba(59, 130, 246, 0.3)';
-    
-    setTimeout(() => {
-      element.style.boxShadow = originalBoxShadow;
+    // Highlight all related elements
+    elements.forEach(el => {
+      const originalBoxShadow = el.style.boxShadow;
+      const originalTransition = el.style.transition;
+      
+      el.style.transition = 'box-shadow 0.3s ease';
+      el.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.8), 0 0 20px rgba(59, 130, 246, 0.3)';
+      
       setTimeout(() => {
-        element.style.transition = originalTransition;
-      }, 300);
-    }, 1500);
+        el.style.boxShadow = originalBoxShadow;
+        setTimeout(() => {
+          el.style.transition = originalTransition;
+        }, 300);
+      }, 1500);
+    });
   }, []);
 
   const handleMinimapClick = useCallback((e) => {
@@ -172,7 +185,6 @@ const MiniMap = ({ leftContainerId, rightContainerId }) => {
     const clickY = e.clientY - rect.top;
     const clickRatio = Math.min(1, Math.max(0, clickY / rect.height));
     
-    // Find closest marker within reasonable distance
     const closestMarker = markers.reduce((closest, marker) => {
       const distance = Math.abs(marker.ratio - clickRatio);
       if (!closest || distance < closest.distance) {
@@ -181,50 +193,29 @@ const MiniMap = ({ leftContainerId, rightContainerId }) => {
       return closest;
     }, null);
     
-    // If click is close to a marker (within 3% of minimap height), jump to that marker
     if (closestMarker && closestMarker.distance < 0.03) {
-      scrollToElement(closestMarker.marker.element);
+      scrollToElement(closestMarker.marker.elements);
+      setCurrentChange(markers.indexOf(closestMarker.marker));
     } else {
-      // Otherwise scroll to the clicked position
       scrollToRatio(clickRatio);
     }
   }, [markers, scrollToRatio, scrollToElement]);
 
-  const handleMarkerClick = useCallback((e, marker) => {
-    e.preventDefault();
-    e.stopPropagation();
-    scrollToElement(marker.element);
-  }, [scrollToElement]);
-
   const navigateToNext = useCallback(() => {
-    const { left } = getContainers();
-    if (!left || markers.length === 0) return;
+    if (markers.length === 0) return;
     
-    const currentScrollRatio = left.scrollTop / Math.max(1, left.scrollHeight - left.clientHeight);
-    const nextMarker = markers.find(m => m.ratio > currentScrollRatio + 0.01);
-    
-    if (nextMarker) {
-      scrollToElement(nextMarker.element);
-    } else if (markers.length > 0) {
-      // Go to first marker if at the end
-      scrollToElement(markers[0].element);
-    }
-  }, [getContainers, markers, scrollToElement]);
+    const nextIndex = (currentChange + 1) % markers.length;
+    setCurrentChange(nextIndex);
+    scrollToElement(markers[nextIndex].elements);
+  }, [markers, currentChange, scrollToElement]);
 
   const navigateToPrevious = useCallback(() => {
-    const { left } = getContainers();
-    if (!left || markers.length === 0) return;
+    if (markers.length === 0) return;
     
-    const currentScrollRatio = left.scrollTop / Math.max(1, left.scrollHeight - left.clientHeight);
-    const previousMarker = [...markers].reverse().find(m => m.ratio < currentScrollRatio - 0.01);
-    
-    if (previousMarker) {
-      scrollToElement(previousMarker.element);
-    } else if (markers.length > 0) {
-      // Go to last marker if at the beginning
-      scrollToElement(markers[markers.length - 1].element);
-    }
-  }, [getContainers, markers, scrollToElement]);
+    const prevIndex = currentChange === 0 ? markers.length - 1 : currentChange - 1;
+    setCurrentChange(prevIndex);
+    scrollToElement(markers[prevIndex].elements);
+  }, [markers, currentChange, scrollToElement]);
 
   const resetView = useCallback(() => {
     const { left, right } = getContainers();
@@ -232,49 +223,33 @@ const MiniMap = ({ leftContainerId, rightContainerId }) => {
     
     left.scrollTo({ top: 0, behavior: 'smooth' });
     right.scrollTo({ top: 0, behavior: 'smooth' });
+    setCurrentChange(0);
   }, [getContainers]);
 
   // Initialize and refresh markers
   useEffect(() => {
     const refreshAll = () => {
-      setMarkers(collectMarkers());
+      setMarkers(collectUnifiedMarkers());
       updateViewport();
     };
 
-    // Initial refresh with delay
     const initialTimer = setTimeout(refreshAll, 500);
     
     const { left, right } = getContainers();
     if (!left || !right) return () => clearTimeout(initialTimer);
 
-    // Handle scroll events
     const handleScroll = () => {
-      setIsScrolling(true);
       updateViewport();
-      
-      // Clear existing timeout
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-      }
-      
-      // Set scrolling to false after scroll ends
-      scrollTimeoutRef.current = setTimeout(() => {
-        setIsScrolling(false);
-      }, 150);
     };
 
-    // Handle content changes
     const handleContentChange = () => {
-      // Debounce content changes
       clearTimeout(window.minimapContentTimer);
       window.minimapContentTimer = setTimeout(refreshAll, 200);
     };
 
-    // Add event listeners
     left.addEventListener('scroll', handleScroll, { passive: true });
     right.addEventListener('scroll', handleScroll, { passive: true });
 
-    // Observe DOM changes
     const observer = new MutationObserver(handleContentChange);
     observer.observe(left, { 
       childList: true, 
@@ -291,7 +266,6 @@ const MiniMap = ({ leftContainerId, rightContainerId }) => {
       characterData: true 
     });
 
-    // Handle window resize
     const handleResize = () => {
       clearTimeout(window.minimapResizeTimer);
       window.minimapResizeTimer = setTimeout(refreshAll, 300);
@@ -302,16 +276,13 @@ const MiniMap = ({ leftContainerId, rightContainerId }) => {
       clearTimeout(initialTimer);
       clearTimeout(window.minimapContentTimer);
       clearTimeout(window.minimapResizeTimer);
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-      }
       
       left.removeEventListener('scroll', handleScroll);
       right.removeEventListener('scroll', handleScroll);
       observer.disconnect();
       window.removeEventListener('resize', handleResize);
     };
-  }, [collectMarkers, updateViewport, getContainers]);
+  }, [collectUnifiedMarkers, updateViewport, getContainers]);
 
   // Group markers by type for legend
   const markersByType = markers.reduce((acc, marker) => {
@@ -321,12 +292,50 @@ const MiniMap = ({ leftContainerId, rightContainerId }) => {
 
   return (
     <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+      {/* Navigation Controls */}
+      <div className="p-3 border-b border-gray-200 bg-gray-50">
+        <div className="flex items-center justify-between">
+          <div className="text-xs font-medium text-gray-600">
+            Unified Changes ({markers.length})
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={navigateToPrevious}
+              disabled={markers.length === 0}
+              className="p-1 rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              title="Previous change"
+            >
+              <ChevronUp className="h-3 w-3" />
+            </button>
+            <span className="text-xs text-gray-500 min-w-[40px] text-center">
+              {markers.length > 0 ? `${currentChange + 1}/${markers.length}` : '0/0'}
+            </span>
+            <button
+              onClick={navigateToNext}
+              disabled={markers.length === 0}
+              className="p-1 rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              title="Next change"
+            >
+              <ChevronDown className="h-3 w-3" />
+            </button>
+            <button
+              onClick={resetView}
+              className="p-1 rounded hover:bg-gray-200 transition-colors ml-1"
+              title="Reset to top"
+            >
+              <RotateCcw className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Unified Minimap */}
       <div className="p-3">
         <div 
           ref={minimapRef}
           onClick={handleMinimapClick}
           className="relative w-full h-48 bg-gradient-to-b from-gray-50 to-gray-100 rounded-lg border-2 border-gray-200 cursor-pointer overflow-hidden transition-all duration-200 hover:border-blue-300 hover:shadow-md"
-          title="Click to navigate • Hover over markers for details"
+          title="Unified document changes • Click to navigate"
         >
           {/* Background grid */}
           <div className="absolute inset-0 opacity-30 pointer-events-none">
@@ -339,27 +348,31 @@ const MiniMap = ({ leftContainerId, rightContainerId }) => {
             ))}
           </div>
           
-          {/* Change markers */}
+          {/* Unified change markers */}
           {markers.map((marker, i) => (
             <div 
-              key={`${marker.side}-${i}`}
-              className="absolute transition-all duration-200 hover:scale-110 cursor-pointer z-20 rounded-sm"
+              key={`unified-${i}`}
+              className={`absolute transition-all duration-200 hover:scale-110 cursor-pointer z-20 rounded-sm ${
+                i === currentChange ? 'ring-2 ring-blue-500 ring-offset-1' : ''
+              }`}
               style={{ 
-                left: marker.side === 'left' ? '2px' : 'calc(50% + 2px)',
-                width: 'calc(50% - 4px)',
+                left: '4px',
+                right: '4px',
                 top: `${marker.ratio * 100}%`, 
-                height: '4px', 
+                height: marker.changeType === 'empty-space' ? '6px' : '4px',
                 backgroundColor: marker.color,
-                opacity: isScrolling ? 0.9 : 0.8,
+                opacity: 0.85,
                 boxShadow: `0 1px 3px ${marker.color}40`
               }}
-              title={`${marker.changeType} change on ${marker.side} - click to navigate`}
-              onClick={(e) => handleMarkerClick(e, marker)}
+              title={`${marker.changeType} change - click to navigate`}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                scrollToElement(marker.elements);
+                setCurrentChange(i);
+              }}
             />
           ))}
-          
-          {/* Center divider */}
-          <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gray-300 z-10 transform -translate-x-0.5" />
           
           {/* Viewport indicator */}
           <div
@@ -371,14 +384,6 @@ const MiniMap = ({ leftContainerId, rightContainerId }) => {
             }}
           />
           
-          {/* Side labels */}
-          <div className="absolute top-1 left-1 text-xs font-medium text-gray-500 pointer-events-none z-40">
-            L
-          </div>
-          <div className="absolute top-1 right-1 text-xs font-medium text-gray-500 pointer-events-none z-40">
-            R
-          </div>
-          
           {/* No changes message */}
           {markers.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
@@ -389,8 +394,39 @@ const MiniMap = ({ leftContainerId, rightContainerId }) => {
           )}
         </div>
       </div>
+
+      {/* Legend */}
+      <div className="p-3 border-t border-gray-200 bg-gray-50">
+        <div className="text-xs font-medium text-gray-600 mb-2">Change Types</div>
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          {markersByType.added > 0 && (
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-2 bg-green-500 rounded-sm"></div>
+              <span className="text-gray-600">Added ({markersByType.added})</span>
+            </div>
+          )}
+          {markersByType.removed > 0 && (
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-2 bg-red-500 rounded-sm"></div>
+              <span className="text-gray-600">Removed ({markersByType.removed})</span>
+            </div>
+          )}
+          {markersByType.modified > 0 && (
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-2 bg-yellow-500 rounded-sm"></div>
+              <span className="text-gray-600">Modified ({markersByType.modified})</span>
+            </div>
+          )}
+          {markersByType['empty-space'] > 0 && (
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-2 bg-purple-500 rounded-sm"></div>
+              <span className="text-gray-600">Empty Space ({markersByType['empty-space']})</span>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
 
-export default MiniMap;
+export default UnifiedMiniMap;

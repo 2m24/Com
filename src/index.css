@@ -163,28 +163,28 @@
 
 /* Enhanced placeholder blocks */
 .word-document-preview .git-line-placeholder {
-  background: transparent;
-  border-left: 4px solid transparent;
+  background: #f8fafc;
+  border: 2px dashed #94a3b8;
   margin: 4px 0;
   border-radius: 6px;
-  min-height: 20px;
+  min-height: 32px;
   display: block;
-  /* Maintain original document formatting while showing as empty space */
-  color: transparent;
-  /* Preserve line height and spacing */
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
   line-height: inherit;
   font-size: inherit;
   font-family: inherit;
-  position: relative;
 }
 
 .word-document-preview .placeholder-added {
-  border-color: #22c55e;
+  border-color: #22c55e !important;
   background-color: #f0fdf4;
 }
 
 .word-document-preview .placeholder-removed {
-  border-color: #ef4444;
+  border-color: #ef4444 !important;
   background-color: #fef2f2;
 }
 

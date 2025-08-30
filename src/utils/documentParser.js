@@ -46,8 +46,8 @@ export const parseWordDocument = async (file, onProgress) => {
       
       // Content rendering - preserve all formatting
       renderImages: true,
-      imageRendering: 'auto',
-      imageQuality: 1.0,
+      imageRendering: 'fast',
+      imageQuality: 0.8,
       convertImages: true,
       imagePositioning: 'inline',
       
@@ -60,55 +60,34 @@ export const parseWordDocument = async (file, onProgress) => {
       renderSpaces: true,
       renderTabs: true,
       
-      // Advanced features - preserve complex formatting
+      // Advanced features - simplified for performance
       renderHyperlinks: true,
       renderBookmarks: true,
-      renderComments: true,
-      renderRevisions: true,
+      renderComments: false,
+      renderRevisions: false,
       renderFields: true,
-      renderFormulas: true,
-      renderCharts: true,
-      renderShapes: true,
-      renderSmartArt: true,
-      renderWatermarks: true,
+      renderFormulas: false,
+      renderCharts: false,
+      renderShapes: false,
+      renderSmartArt: false,
+      renderWatermarks: false,
       renderBackgrounds: true,
       renderBorders: true,
-      renderShadows: true,
-      renderEffects: true,
-      renderTransforms: true,
-      renderAnimations: true,
-      renderMedia: true,
-      renderEmbedded: true,
-      renderOle: true,
-      renderActiveX: true,
-      renderMacros: true,
-      renderCustomXml: true,
-      renderContentControls: true,
-      renderSdt: true,
-      
-      // Legacy support - preserve old document formats
-      renderLegacyNumbering: true,
-      renderLegacyBorders: true,
-      renderLegacyShading: true,
-      renderLegacySpacing: true,
-      renderLegacyIndentation: true,
-      renderLegacyAlignment: true,
-      renderLegacyFonts: true,
-      renderLegacyColors: true,
-      renderLegacyEffects: true,
-      renderLegacyTransforms: true,
-      renderLegacyAnimations: true,
-      renderLegacyMedia: true,
-      renderLegacyEmbedded: true,
-      renderLegacyOle: true,
-      renderLegacyActiveX: true,
-      renderLegacyMacros: true,
-      renderLegacyCustomXml: true,
-      renderLegacyContentControls: true,
-      renderLegacySdt: true,
+      renderShadows: false,
+      renderEffects: false,
+      renderTransforms: false,
+      renderAnimations: false,
+      renderMedia: false,
+      renderEmbedded: false,
+      renderOle: false,
+      renderActiveX: false,
+      renderMacros: false,
+      renderCustomXml: false,
+      renderContentControls: false,
+      renderSdt: false,
       
       // Font handling - preserve exact fonts and sizes
-      fontRendering: 'auto',
+      fontRendering: 'fast',
       fontSubstitution: false,
       fontEmbedding: false,
       
@@ -129,7 +108,7 @@ export const parseWordDocument = async (file, onProgress) => {
     
     if (onProgress) onProgress('Processing images and content...');
     // Wait a bit for images to load
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 50));
     
     // Extract HTML content
     const htmlContent = container.innerHTML;
@@ -140,7 +119,7 @@ export const parseWordDocument = async (file, onProgress) => {
     if (onProgress) onProgress('Optimizing fonts and layout...');
     // Normalize fonts and collect any web fonts to load for better Word parity
     const { html: fontNormalizedHtml, usedWebFonts } = normalizeAndCollectFonts(processedHtml);
-    loadWebFontsIfNeeded(usedWebFonts);
+    // Skip web font loading for performance
     
     // Extract plain text while preserving structure
     if (onProgress) onProgress('Finalizing document...');
