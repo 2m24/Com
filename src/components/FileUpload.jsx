@@ -1,10 +1,11 @@
 import React, { useCallback } from 'react';
-import { Upload, FileText, AlertCircle } from 'lucide-react';
+import { Upload, FileText, AlertCircle, Loader2 } from 'lucide-react';
 import { parseWordDocument, validateFile } from '../utils/documentParser';
 
 const FileUpload = ({ onFileUpload, label, uploadedFile, disabled }) => {
   const [isDragging, setIsDragging] = React.useState(false);
   const [isProcessing, setIsProcessing] = React.useState(false);
+  const [processingStep, setProcessingStep] = React.useState('');
   const [error, setError] = React.useState('');
 
   const handleFile = useCallback(async (file) => {
@@ -15,9 +16,10 @@ const FileUpload = ({ onFileUpload, label, uploadedFile, disabled }) => {
 
     setError('');
     setIsProcessing(true);
+    setProcessingStep('Reading file...');
 
     try {
-      const { content, htmlContent } = await parseWordDocument(file);
+      const { content, htmlContent } = await parseWordDocument(file, setProcessingStep);
       
       const documentData = {
         id: Math.random().toString(36).substr(2, 9),
@@ -30,9 +32,11 @@ const FileUpload = ({ onFileUpload, label, uploadedFile, disabled }) => {
 
       onFileUpload(documentData);
     } catch (err) {
+      console.error('Document processing error:', err);
       setError(err instanceof Error ? err.message : 'Failed to process document');
     } finally {
       setIsProcessing(false);
+      setProcessingStep('');
     }
   }, [onFileUpload]);
 
@@ -84,8 +88,9 @@ const FileUpload = ({ onFileUpload, label, uploadedFile, disabled }) => {
       >
         {isProcessing ? (
           <div className="flex flex-col items-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-3"></div>
-            <p className="text-sm text-gray-600">Processing document...</p>
+            <Loader2 className="h-8 w-8 text-blue-600 animate-spin mb-3" />
+            <p className="text-sm font-medium text-gray-700 mb-1">Processing document...</p>
+            <p className="text-xs text-gray-500">{processingStep}</p>
           </div>
         ) : uploadedFile ? (
           <div className="flex flex-col items-center">

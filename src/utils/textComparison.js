@@ -26,6 +26,8 @@ export const compareDocuments = (leftText, rightText) => {
 
 export const compareHtmlDocuments = (leftHtml, rightHtml) => {
   try {
+    console.log('Starting document comparison...');
+    
     // First, check if documents are identical
     const leftText = extractPlainText(leftHtml);
     const rightText = extractPlainText(rightHtml);
@@ -39,6 +41,8 @@ export const compareHtmlDocuments = (leftHtml, rightHtml) => {
       return { leftDiffs, rightDiffs, summary, detailed };
     }
 
+    console.log('Documents differ, performing detailed comparison...');
+    
     // Check if we're in a browser environment
     if (typeof document === "undefined") {
       console.error("Document comparison requires browser environment");
@@ -50,10 +54,12 @@ export const compareHtmlDocuments = (leftHtml, rightHtml) => {
       };
     }
 
+    console.log('Applying block-level comparison...');
     // Apply mutual block-level comparison
     const { leftWithBlocks, rightWithBlocks, blockSummary } = 
       applyMutualBlockComparison(leftHtml, rightHtml);
 
+    console.log('Applying structural comparisons...');
     // Apply mutual structural comparisons
     const { leftWithImages, rightWithImages, imageSummary } =
       applyMutualImageComparison(leftWithBlocks, rightWithBlocks);
@@ -61,6 +67,7 @@ export const compareHtmlDocuments = (leftHtml, rightHtml) => {
     const { leftWithTables, rightWithTables, tableSummary } = 
       applyMutualTableComparison(leftWithImages, rightWithImages);
 
+    console.log('Applying word-level comparison...');
     // Apply mutual word-level text comparison
     const { leftFinal, rightFinal, textSummary } =
       applyMutualWordLevelComparison(leftWithTables, rightWithTables);
@@ -72,14 +79,17 @@ export const compareHtmlDocuments = (leftHtml, rightHtml) => {
     };
     summary.changes = summary.additions + summary.deletions;
 
+    console.log('Generating detailed report...');
     const detailed = generateDetailedReport(leftHtml, rightHtml);
 
+    console.log('Comparison completed successfully');
     const leftDiffs = [{ type: "equal", content: leftFinal }];
     const rightDiffs = [{ type: "equal", content: rightFinal }];
 
     return { leftDiffs, rightDiffs, summary, detailed };
   } catch (error) {
     console.error("Error during document comparison:", error);
+    console.error("Error stack:", error.stack);
     // Return original content on error
     return {
       leftDiffs: [{ type: "equal", content: leftHtml }],
@@ -92,6 +102,7 @@ export const compareHtmlDocuments = (leftHtml, rightHtml) => {
 
 // Mutual block-level comparison - both documents show all changes
 const applyMutualBlockComparison = (leftHtml, rightHtml) => {
+  try {
   const leftDiv = htmlToDiv(leftHtml);
   const rightDiv = htmlToDiv(rightHtml);
 
@@ -142,6 +153,14 @@ const applyMutualBlockComparison = (leftHtml, rightHtml) => {
     rightWithBlocks: rightDiv.innerHTML,
     blockSummary: { additions, deletions }
   };
+  } catch (error) {
+    console.error('Error in block comparison:', error);
+    return {
+      leftWithBlocks: leftHtml,
+      rightWithBlocks: rightHtml,
+      blockSummary: { additions: 0, deletions: 0 }
+    };
+  }
 };
 
 // Extract blocks for comparison
@@ -300,6 +319,7 @@ const createPlaceholderBlock = (originalElement, type) => {
 
 // Mutual image comparison
 const applyMutualImageComparison = (leftHtml, rightHtml) => {
+  try {
   const leftDiv = htmlToDiv(leftHtml);
   const rightDiv = htmlToDiv(rightHtml);
 
@@ -348,6 +368,14 @@ const applyMutualImageComparison = (leftHtml, rightHtml) => {
     rightWithImages: rightDiv.innerHTML,
     imageSummary: { additions, deletions }
   };
+  } catch (error) {
+    console.error('Error in image comparison:', error);
+    return {
+      leftWithImages: leftHtml,
+      rightWithImages: rightHtml,
+      imageSummary: { additions: 0, deletions: 0 }
+    };
+  }
 };
 
 // Create image placeholder
@@ -397,6 +425,7 @@ const insertImagePlaceholder = (container, placeholder, targetIndex) => {
 
 // Mutual table comparison
 const applyMutualTableComparison = (leftHtml, rightHtml) => {
+  try {
   const leftDiv = htmlToDiv(leftHtml);
   const rightDiv = htmlToDiv(rightHtml);
 
@@ -438,6 +467,14 @@ const applyMutualTableComparison = (leftHtml, rightHtml) => {
     rightWithTables: rightDiv.innerHTML,
     tableSummary: { additions, deletions }
   };
+  } catch (error) {
+    console.error('Error in table comparison:', error);
+    return {
+      leftWithTables: leftHtml,
+      rightWithTables: rightHtml,
+      tableSummary: { additions: 0, deletions: 0 }
+    };
+  }
 };
 
 // Create table placeholder
@@ -543,6 +580,7 @@ const compareTableContents = (leftTable, rightTable) => {
 
 // Mutual word-level comparison using diff-match-patch
 const applyMutualWordLevelComparison = (leftHtml, rightHtml) => {
+  try {
   const leftDiv = htmlToDiv(leftHtml);
   const rightDiv = htmlToDiv(rightHtml);
 
@@ -585,6 +623,14 @@ const applyMutualWordLevelComparison = (leftHtml, rightHtml) => {
     rightFinal: rightDiv.innerHTML,
     textSummary: { additions, deletions }
   };
+  } catch (error) {
+    console.error('Error in word-level comparison:', error);
+    return {
+      leftFinal: leftHtml,
+      rightFinal: rightHtml,
+      textSummary: { additions: 0, deletions: 0 }
+    };
+  }
 };
 
 // Get text blocks suitable for word-level comparison
@@ -752,15 +798,27 @@ const isInsideTable = (node) => {
 };
 
 const htmlToDiv = (html) => {
+  if (!html) return document.createElement("div");
+  
   const d = document.createElement("div");
-  d.innerHTML = html;
+  try {
+    d.innerHTML = html;
+  } catch (error) {
+    console.warn('Error parsing HTML:', error);
+  }
   return d;
 };
 
 const extractPlainText = (html) => {
   if (!html) return "";
+  
   const tempDiv = document.createElement("div");
-  tempDiv.innerHTML = html;
+  try {
+    tempDiv.innerHTML = html;
+  } catch (error) {
+    console.warn('Error extracting plain text:', error);
+    return "";
+  }
   const text = tempDiv.textContent || "";
   return text;
 };
@@ -890,6 +948,7 @@ const areWordsEquivalent = (word1, word2) => {
 };
 
 export const generateDetailedReport = (leftHtml, rightHtml) => {
+  try {
   const L = htmlToDiv(leftHtml);
   const R = htmlToDiv(rightHtml);
 
@@ -1066,4 +1125,8 @@ export const generateDetailedReport = (leftHtml, rightHtml) => {
   }
 
   return { lines, tables: tableReport, images: imgReport };
+  } catch (error) {
+    console.error('Error generating detailed report:', error);
+    return { lines: [], tables: [], images: [] };
+  }
 };

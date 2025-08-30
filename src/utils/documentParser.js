@@ -1,9 +1,11 @@
 import { renderAsync } from 'docx-preview';
 
-export const parseWordDocument = async (file) => {
+export const parseWordDocument = async (file, onProgress) => {
   try {
+    if (onProgress) onProgress('Reading file data...');
     const arrayBuffer = await file.arrayBuffer();
     
+    if (onProgress) onProgress('Initializing document renderer...');
     // Use docx-preview to render the document
     const container = document.createElement('div');
     container.style.width = '100%';
@@ -11,6 +13,7 @@ export const parseWordDocument = async (file) => {
     container.style.position = 'relative';
     container.className = 'word-document-preview';
     
+    if (onProgress) onProgress('Rendering document content...');
     await renderAsync(arrayBuffer, container, container, {
       // Core rendering options for maximum format preservation
       className: 'word-document-preview',
@@ -105,9 +108,9 @@ export const parseWordDocument = async (file) => {
       renderLegacySdt: true,
       
       // Font handling - preserve exact fonts and sizes
-      fontRendering: 'canvas',
+      fontRendering: 'auto',
       fontSubstitution: false,
-      fontEmbedding: true,
+      fontEmbedding: false,
       
       // Spacing and layout - preserve document's exact spacing
       preserveWhitespace: true,
@@ -124,8 +127,9 @@ export const parseWordDocument = async (file) => {
       preserveBackgrounds: true
     });
     
+    if (onProgress) onProgress('Processing images and content...');
     // Wait a bit for images to load
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise(resolve => setTimeout(resolve, 100));
     
     // Extract HTML content
     const htmlContent = container.innerHTML;
@@ -133,11 +137,13 @@ export const parseWordDocument = async (file) => {
     // Process images to ensure they're properly displayed
     const processedHtml = processImagesInHtml(htmlContent);
 
+    if (onProgress) onProgress('Optimizing fonts and layout...');
     // Normalize fonts and collect any web fonts to load for better Word parity
     const { html: fontNormalizedHtml, usedWebFonts } = normalizeAndCollectFonts(processedHtml);
     loadWebFontsIfNeeded(usedWebFonts);
     
     // Extract plain text while preserving structure
+    if (onProgress) onProgress('Finalizing document...');
     const plainText = extractPlainTextWithStructure(fontNormalizedHtml);
     
     return {
@@ -158,37 +164,42 @@ const processImagesInHtml = (html) => {
   // Find all images and ensure they have proper attributes
   const images = tempDiv.querySelectorAll('img');
   images.forEach(img => {
-    // Ensure image has proper styling
-    if (!img.style.maxWidth) {
-      img.style.maxWidth = '100%';
-    }
-    if (!img.style.height) {
-      img.style.height = 'auto';
-    }
-    if (!img.style.display) {
-      img.style.display = 'block';
-    }
-    
-    // Add alt text if missing
-    if (!img.alt) {
-      img.alt = 'Document image';
-    }
-    
-    // Ensure proper loading
-    img.loading = 'lazy';
-    
-    // Add error handling
-    img.onerror = function() {
-      this.style.display = 'none';
-      console.warn('Failed to load image:', this.src);
-    };
-    
-    // Ensure base64 images are properly formatted
-    if (img.src && img.src.startsWith('data:image')) {
-      // Ensure the data URL is properly formatted
-      if (!img.src.includes(';base64,')) {
-        console.warn('Invalid base64 image format:', img.src);
+    try {
+      // Ensure image has proper styling
+      if (!img.style.maxWidth) {
+        img.style.maxWidth = '100%';
       }
+      if (!img.style.height) {
+        img.style.height = 'auto';
+      }
+      if (!img.style.display) {
+        img.style.display = 'block';
+      }
+      
+      // Add alt text if missing
+      if (!img.alt) {
+        img.alt = 'Document image';
+      }
+      
+      // Ensure proper loading
+      img.loading = 'lazy';
+      
+      // Add error handling
+      img.onerror = function() {
+        this.style.display = 'none';
+        console.warn('Failed to load image:', this.src);
+      };
+      
+      // Ensure base64 images are properly formatted
+      if (img.src && img.src.startsWith('data:image')) {
+        // Ensure the data URL is properly formatted
+        if (!img.src.includes(';base64,')) {
+          console.warn('Invalid base64 image format:', img.src);
+        }
+      }
+    } catch (error) {
+      console.warn('Error processing image:', error);
+      img.style.display = 'none';
     }
   });
   
@@ -196,8 +207,15 @@ const processImagesInHtml = (html) => {
 };
 
 const extractPlainTextWithStructure = (html) => {
+  if (!html) return '';
+  
   const tempDiv = document.createElement('div');
-  tempDiv.innerHTML = html;
+  try {
+    tempDiv.innerHTML = html;
+  } catch (error) {
+    console.warn('Error parsing HTML for text extraction:', error);
+    return '';
+  }
   
   // Process elements to preserve structure
   const processElement = (element) => {
@@ -239,8 +257,12 @@ const extractPlainTextWithStructure = (html) => {
   let result = '';
   
   elements.forEach(element => {
-    if (!element.children.length) { // Only process leaf elements
-      result += processElement(element);
+    try {
+      if (!element.children.length) { // Only process leaf elements
+        result += processElement(element);
+      }
+    } catch (error) {
+      console.warn('Error processing element:', error);
     }
   });
   
@@ -280,33 +302,44 @@ const WEB_FONT_TO_GOOGLE_FAMILY = {
 
 // Normalize inline font stacks and collect which web fonts must be loaded
 const normalizeAndCollectFonts = (html) => {
+  if (!html) return { html: '', usedWebFonts: [] };
+  
   const tempDiv = document.createElement('div');
-  tempDiv.innerHTML = html;
+  try {
+    tempDiv.innerHTML = html;
+  } catch (error) {
+    console.warn('Error parsing HTML for font normalization:', error);
+    return { html, usedWebFonts: [] };
+  }
 
   const usedWebFonts = new Set();
 
   const elementsWithFont = tempDiv.querySelectorAll('[style*="font-family"]');
   elementsWithFont.forEach((el) => {
-    const current = el.style.fontFamily || '';
-    if (!current) return;
+    try {
+      const current = el.style.fontFamily || '';
+      if (!current) return;
 
-    // Normalize quotes and spacing for easier matching
-    const normalized = current.replace(/\s*,\s*/g, ', ').replace(/\"|\'/g, '');
-    let updated = normalized;
+      // Normalize quotes and spacing for easier matching
+      const normalized = current.replace(/\s*,\s*/g, ', ').replace(/\"|\'/g, '');
+      let updated = normalized;
 
-    Object.entries(WORD_FONT_TO_WEB_FONT).forEach(([wordFont, webFont]) => {
-      if (normalized.toLowerCase().includes(wordFont.toLowerCase())) {
-        // Ensure the web font is present right after the Word font for best matching
-        const regex = new RegExp(`(^|, )${wordFont}(, |$)`, 'i');
-        if (!new RegExp(`(^|, )${webFont}(, |$)`, 'i').test(updated)) {
-          updated = updated.replace(regex, (m, p1, p2) => `${p1}${wordFont}, ${webFont}${p2 || ''}`);
-          usedWebFonts.add(webFont);
+      Object.entries(WORD_FONT_TO_WEB_FONT).forEach(([wordFont, webFont]) => {
+        if (normalized.toLowerCase().includes(wordFont.toLowerCase())) {
+          // Ensure the web font is present right after the Word font for best matching
+          const regex = new RegExp(`(^|, )${wordFont}(, |$)`, 'i');
+          if (!new RegExp(`(^|, )${webFont}(, |$)`, 'i').test(updated)) {
+            updated = updated.replace(regex, (m, p1, p2) => `${p1}${wordFont}, ${webFont}${p2 || ''}`);
+            usedWebFonts.add(webFont);
+          }
         }
-      }
-    });
+      });
 
-    if (updated !== normalized) {
-      el.style.fontFamily = updated;
+      if (updated !== normalized) {
+        el.style.fontFamily = updated;
+      }
+    } catch (error) {
+      console.warn('Error processing font for element:', error);
     }
   });
 
@@ -315,23 +348,27 @@ const normalizeAndCollectFonts = (html) => {
 
 // Inject Google Fonts link tag if needed
 const loadWebFontsIfNeeded = (webFonts) => {
-  if (!webFonts || webFonts.length === 0) return;
+  try {
+    if (!webFonts || webFonts.length === 0) return;
 
-  const id = 'doc-compare-webfonts';
-  if (document.getElementById(id)) return; // already loaded
+    const id = 'doc-compare-webfonts';
+    if (document.getElementById(id)) return; // already loaded
 
-  const families = webFonts
-    .map((name) => WEB_FONT_TO_GOOGLE_FAMILY[name])
-    .filter(Boolean);
-  if (families.length === 0) return;
+    const families = webFonts
+      .map((name) => WEB_FONT_TO_GOOGLE_FAMILY[name])
+      .filter(Boolean);
+    if (families.length === 0) return;
 
-  const href = `https://fonts.googleapis.com/css2?${families
-    .map((f) => `family=${encodeURIComponent(f)}`)
-    .join('&')}&display=swap`;
+    const href = `https://fonts.googleapis.com/css2?${families
+      .map((f) => `family=${encodeURIComponent(f)}`)
+      .join('&')}&display=swap`;
 
-  const link = document.createElement('link');
-  link.id = id;
-  link.rel = 'stylesheet';
-  link.href = href;
-  document.head.appendChild(link);
+    const link = document.createElement('link');
+    link.id = id;
+    link.rel = 'stylesheet';
+    link.href = href;
+    document.head.appendChild(link);
+  } catch (error) {
+    console.warn('Error loading web fonts:', error);
+  }
 };

@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from "react";
+import { Loader2 } from "lucide-react";
 import Header from "./components/Header";
 import FileUpload from "./components/FileUpload";
 import DocumentPreview from "./components/DocumentPreview";
@@ -17,6 +18,7 @@ function App() {
   const [rightDocument, setRightDocument] = useState(null);
   const [comparison, setComparison] = useState(null);
   const [viewMode, setViewMode] = useState("preview");
+  const [isComparing, setIsComparing] = useState(false);
   const [showDetailed, setShowDetailed] = useState(false);
 
   const handleDocumentUpload = useCallback((document, position) => {
@@ -32,20 +34,32 @@ function App() {
 
   const handleCompareDocuments = useCallback(() => {
     console.log("Compare button clicked!");
-    console.log("Left document:", leftDocument);
-    console.log("Right document:", rightDocument);
+    console.log("Left document:", leftDocument?.name);
+    console.log("Right document:", rightDocument?.name);
 
     if (leftDocument && rightDocument) {
       console.log("Both documents exist, starting comparison...");
+      setIsComparing(true);
+      
       // Always use original, unmodified HTML content for comparison
-      const result = compareHtmlDocuments(
-        leftDocument.originalHtmlContent,
-        rightDocument.originalHtmlContent
-      );
-      console.log("Comparison result:", result);
-      setComparison(result);
-      setViewMode("comparison");
-      console.log("Comparison completed, view mode set to comparison");
+      // Use setTimeout to allow UI to update before heavy computation
+      setTimeout(() => {
+        try {
+          const result = compareHtmlDocuments(
+            leftDocument.originalHtmlContent,
+            rightDocument.originalHtmlContent
+          );
+          console.log("Comparison result summary:", result.summary);
+          setComparison(result);
+          setViewMode("comparison");
+          console.log("Comparison completed, view mode set to comparison");
+        } catch (error) {
+          console.error("Comparison failed:", error);
+          alert("Failed to compare documents. Please try again with smaller files or contact support.");
+        } finally {
+          setIsComparing(false);
+        }
+      }, 100);
     } else {
       console.log("Cannot compare - missing documents");
     }
@@ -136,10 +150,17 @@ function App() {
             )}
             <button
               onClick={handleCompareDocuments}
-              disabled={!canCompare}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md"
+              disabled={!canCompare || isComparing}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-2"
             >
-              Compare Documents
+              {isComparing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Comparing...
+                </>
+              ) : (
+                'Compare Documents'
+              )}
             </button>
             <button
               onClick={clearDocuments}

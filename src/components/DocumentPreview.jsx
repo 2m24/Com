@@ -54,11 +54,14 @@ const DocumentPreview = ({ document, diffs, title, containerId }) => {
 
   // Auto-scale content to fit container width while preserving proportions
   useEffect(() => {
-    if (!contentRef.current || !containerRef.current) return;
+    if (!contentRef.current || !containerRef.current || !content) return;
 
     const adjustScale = () => {
+      try {
       const content = contentRef.current;
       const container = containerRef.current;
+      
+      if (!content || !container) return;
       
       // Reset transform to measure natural size
       content.style.transform = 'none';
@@ -82,13 +85,18 @@ const DocumentPreview = ({ document, diffs, title, containerId }) => {
         content.style.width = '100%';
         content.style.height = 'auto';
       }
+      } catch (error) {
+        console.warn('Error adjusting document scale:', error);
+      }
     };
 
     // Adjust scale after content loads and on resize
     const timer = setTimeout(adjustScale, 200);
     
     const resizeObserver = new ResizeObserver(adjustScale);
-    resizeObserver.observe(containerRef.current);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
 
     return () => {
       clearTimeout(timer);
@@ -124,7 +132,7 @@ const DocumentPreview = ({ document, diffs, title, containerId }) => {
           <div 
             ref={contentRef}
             className="word-document-preview bg-white shadow-sm border border-gray-100 rounded-lg p-6"
-            dangerouslySetInnerHTML={{ __html: content }}
+            dangerouslySetInnerHTML={{ __html: content || '' }}
             style={{ 
               minHeight: '100%',
               transition: 'transform 0.2s ease-out'
