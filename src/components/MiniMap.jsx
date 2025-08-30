@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
 
-// All possible change indicator classes
 const CHANGE_SELECTORS = [
   '.git-line-added',
   '.git-line-removed', 
@@ -322,39 +321,6 @@ const MiniMap = ({ leftContainerId, rightContainerId }) => {
 
   return (
     <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-slate-50 to-gray-50 px-4 py-3 border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <h4 className="text-sm font-semibold text-gray-800">Navigation</h4>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={navigateToPrevious}
-              disabled={markers.length === 0}
-              className="p-1 rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              title="Previous change"
-            >
-              <ChevronUp className="h-3 w-3 text-gray-600" />
-            </button>
-            <button
-              onClick={navigateToNext}
-              disabled={markers.length === 0}
-              className="p-1 rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              title="Next change"
-            >
-              <ChevronDown className="h-3 w-3 text-gray-600" />
-            </button>
-            <button
-              onClick={resetView}
-              className="p-1 rounded hover:bg-gray-200 transition-colors ml-1"
-              title="Reset to top"
-            >
-              <RotateCcw className="h-3 w-3 text-gray-600" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* MiniMap */}
       <div className="p-3">
         <div 
           ref={minimapRef}
@@ -422,33 +388,6 @@ const MiniMap = ({ leftContainerId, rightContainerId }) => {
             </div>
           )}
         </div>
-
-        {/* Legend */}
-        {markers.length > 0 && (
-          <div className="mt-3 space-y-2">
-            <div className="text-xs font-medium text-gray-700">Changes ({markers.length})</div>
-            <div className="grid grid-cols-1 gap-1 text-xs">
-              {markersByType.added > 0 && (
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-2 bg-emerald-500 rounded-sm"></div>
-                  <span className="text-gray-600">{markersByType.added} added</span>
-                </div>
-              )}
-              {markersByType.removed > 0 && (
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-2 bg-red-500 rounded-sm"></div>
-                  <span className="text-gray-600">{markersByType.removed} removed</span>
-                </div>
-              )}
-              {markersByType.modified > 0 && (
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-2 bg-amber-500 rounded-sm"></div>
-                  <span className="text-gray-600">{markersByType.modified} modified</span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

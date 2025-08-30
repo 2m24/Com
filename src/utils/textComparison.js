@@ -113,7 +113,7 @@ const applyMutualBlockComparison = (leftHtml, rightHtml) => {
         
         // Create placeholder in left document
         const placeholder = createPlaceholderBlock(right.element, 'removed');
-        insertPlaceholderInLeft(leftDiv, placeholder, right.index);
+        // insertPlaceholderInLeft(leftDiv, placeholder, right.index);
       }
     } else if (type === 'removed') {
       // Block exists only in left document
@@ -123,7 +123,7 @@ const applyMutualBlockComparison = (leftHtml, rightHtml) => {
         
         // Create placeholder in right document
         const placeholder = createPlaceholderBlock(left.element, 'added');
-        insertPlaceholderInRight(rightDiv, placeholder, left.index);
+        // insertPlaceholderInRight(rightDiv, placeholder, left.index);
       }
     } else if (type === 'modified') {
       // Block exists in both but content differs
@@ -280,23 +280,23 @@ const createPlaceholderBlock = (originalElement, type) => {
 };
 
 // Insert placeholder in appropriate position
-const insertPlaceholderInLeft = (leftDiv, placeholder, targetIndex) => {
-  const blocks = leftDiv.querySelectorAll('p, h1, h2, h3, h4, h5, h6, div, li');
-  if (targetIndex < blocks.length) {
-    blocks[targetIndex].parentNode.insertBefore(placeholder, blocks[targetIndex]);
-  } else {
-    leftDiv.appendChild(placeholder);
-  }
-};
+// const insertPlaceholderInLeft = (leftDiv, placeholder, targetIndex) => {
+//   const blocks = leftDiv.querySelectorAll('p, h1, h2, h3, h4, h5, h6, div, li');
+//   if (targetIndex < blocks.length) {
+//     blocks[targetIndex].parentNode.insertBefore(placeholder, blocks[targetIndex]);
+//   } else {
+//     leftDiv.appendChild(placeholder);
+//   }
+// };
 
-const insertPlaceholderInRight = (rightDiv, placeholder, targetIndex) => {
-  const blocks = rightDiv.querySelectorAll('p, h1, h2, h3, h4, h5, h6, div, li');
-  if (targetIndex < blocks.length) {
-    blocks[targetIndex].parentNode.insertBefore(placeholder, blocks[targetIndex]);
-  } else {
-    rightDiv.appendChild(placeholder);
-  }
-};
+// const insertPlaceholderInRight = (rightDiv, placeholder, targetIndex) => {
+//   const blocks = rightDiv.querySelectorAll('p, h1, h2, h3, h4, h5, h6, div, li');
+//   if (targetIndex < blocks.length) {
+//     blocks[targetIndex].parentNode.insertBefore(placeholder, blocks[targetIndex]);
+//   } else {
+//     rightDiv.appendChild(placeholder);
+//   }
+// };
 
 // Mutual image comparison
 const applyMutualImageComparison = (leftHtml, rightHtml) => {
