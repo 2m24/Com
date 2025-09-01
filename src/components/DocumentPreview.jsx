@@ -1,11 +1,14 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { renderHtmlDifferences } from '../utils/textComparison';
+import { AlertCircle, FileText, Loader2 } from 'lucide-react';
 
 const DocumentPreview = ({ document, diffs, title, containerId }) => {
   const contentRef = useRef(null);
   const containerRef = useRef(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const content = diffs ? renderHtmlDifferences(diffs) : document.originalHtmlContent;
+  const content = diffs ? renderHtmlDifferences(diffs) : document?.originalHtmlContent;
 
   // Handle scroll synchronization between containers
   useEffect(() => {
@@ -52,57 +55,48 @@ const DocumentPreview = ({ document, diffs, title, containerId }) => {
     };
   }, [containerId]);
 
-  // Auto-scale content to fit container width while preserving proportions
+  // Handle content rendering
   useEffect(() => {
-    if (!contentRef.current || !containerRef.current || !content) return;
+    if (!content || !contentRef.current) return;
 
-    const adjustScale = () => {
-      try {
-      const content = contentRef.current;
-      const container = containerRef.current;
-      
-      if (!content || !container) return;
-      
-      // Reset transform to measure natural size
-      content.style.transform = 'none';
-      content.style.width = 'auto';
-      
-      // Measure content and container
-      const contentWidth = content.scrollWidth;
-      const containerWidth = container.clientWidth - 32; // Account for padding
-      
-      if (contentWidth > containerWidth) {
-        const scale = containerWidth / contentWidth;
-        content.style.transform = `scale(${scale})`;
-        content.style.transformOrigin = 'top left';
-        content.style.width = `${100 / scale}%`;
-        
-        // Adjust container height to account for scaling
-        const scaledHeight = content.scrollHeight * scale;
-        content.style.height = `${content.scrollHeight}px`;
-      } else {
-        content.style.transform = 'none';
-        content.style.width = '100%';
-        content.style.height = 'auto';
-      }
-      } catch (error) {
-        console.warn('Error adjusting document scale:', error);
-      }
-    };
+    setIsLoading(true);
+    setError(null);
 
-    // Adjust scale after content loads and on resize
-    const timer = setTimeout(adjustScale, 200);
-    
-    const resizeObserver = new ResizeObserver(adjustScale);
-    if (containerRef.current) {
-      resizeObserver.observe(containerRef.current);
+    try {
+      // Ensure content is properly rendered
+      const timer = setTimeout(() => {
+        if (contentRef.current) {
+          // Check if content was rendered successfully
+          const hasContent = contentRef.current.innerHTML.trim() !== '';
+          if (!hasContent) {
+            setError('Failed to render document content');
+          }
+        }
+        setIsLoading(false);
+      }, 300);
+
+      return () => clearTimeout(timer);
+    } catch (err) {
+      setError('Error rendering document');
+      setIsLoading(false);
     }
-
-    return () => {
-      clearTimeout(timer);
-      resizeObserver.disconnect();
-    };
   }, [content]);
+
+  if (!document) {
+    return (
+      <div className="h-full flex flex-col bg-white rounded-xl shadow-lg border border-gray-200">
+        <div className="border-b border-gray-200 p-4 bg-gray-50">
+          <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center text-gray-500">
+            <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
+            <p>No document uploaded</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
@@ -123,22 +117,45 @@ const DocumentPreview = ({ document, diffs, title, containerId }) => {
       
       {/* Content */}
       <div 
-        className="flex-1 overflow-auto bg-white" 
+        className="flex-1 overflow-auto bg-gray-50" 
         id={containerId} 
         ref={containerRef}
         style={{ scrollBehavior: 'smooth' }}
       >
-        <div className="p-4">
-          <div 
-            ref={contentRef}
-            className="word-document-preview bg-white shadow-sm border border-gray-100 rounded-lg p-6"
-            dangerouslySetInnerHTML={{ __html: content || '' }}
-            style={{ 
-              minHeight: '100%',
-              transition: 'transform 0.2s ease-out'
-            }}
-          />
-        </div>
+        {isLoading ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <Loader2 className="h-8 w-8 text-blue-600 animate-spin mx-auto mb-3" />
+              <p className="text-gray-600">Rendering document...</p>
+            </div>
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center text-red-600">
+              <AlertCircle className="h-12 w-12 mx-auto mb-3" />
+              <p className="font-medium">Error loading document</p>
+              <p className="text-sm text-gray-600 mt-1">{error}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="p-6">
+            <div 
+              ref={contentRef}
+              className="word-document-preview bg-white shadow-lg border border-gray-200 rounded-lg mx-auto"
+              style={{ 
+                maxWidth: '210mm', // A4 width
+                minHeight: '297mm', // A4 height
+                padding: '25.4mm', // 1 inch margins
+                fontFamily: 'Calibri, Arial, sans-serif',
+                fontSize: '11pt',
+                lineHeight: '1.15',
+                color: '#000000',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+              }}
+              dangerouslySetInnerHTML={{ __html: content || '<p style="color: #6b7280; font-style: italic;">No content available</p>' }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

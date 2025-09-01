@@ -41,23 +41,25 @@ function App() {
       console.log("Both documents exist, starting comparison...");
       setIsComparing(true);
       
-      // Use async comparison to prevent browser blocking
-      compareHtmlDocuments(
+      // Use immediate async comparison with better error handling
+      Promise.resolve().then(() => 
+        compareHtmlDocuments(
         leftDocument.originalHtmlContent,
         rightDocument.originalHtmlContent
-      ).then(result => {
+      )).then(result => {
         console.log("Comparison result summary:", result.summary);
         setComparison(result);
         setViewMode("comparison");
         console.log("Comparison completed, view mode set to comparison");
       }).catch(error => {
         console.error("Comparison failed:", error);
-        alert("Failed to compare documents. Please try again with smaller files or contact support.");
+        alert(`Failed to compare documents: ${error.message}. Please try again.`);
       }).finally(() => {
         setIsComparing(false);
       });
     } else {
       console.log("Cannot compare - missing documents");
+      alert("Please upload both documents before comparing.");
     }
   }, [leftDocument, rightDocument]);
 

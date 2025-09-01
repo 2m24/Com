@@ -14,22 +14,31 @@ const FileUpload = ({ onFileUpload, label, uploadedFile, disabled }) => {
       return;
     }
 
+    if (file.size > 50 * 1024 * 1024) { // 50MB limit
+      setError('File is too large. Please upload a file smaller than 50MB.');
+      return;
+    }
     setError('');
     setIsProcessing(true);
     setProcessingStep('Reading file...');
 
     try {
-      const { content, htmlContent } = await parseWordDocument(file, setProcessingStep);
+      const result = await parseWordDocument(file, setProcessingStep);
+      
+      if (!result || !result.htmlContent) {
+        throw new Error('Failed to extract document content');
+      }
       
       const documentData = {
         id: Math.random().toString(36).substr(2, 9),
         name: file.name,
-        content,
-        htmlContent,
-        originalHtmlContent: htmlContent,
+        content: result.content,
+        htmlContent: result.htmlContent,
+        originalHtmlContent: result.htmlContent,
         file
       };
 
+      console.log('Document processed successfully:', documentData.name);
       onFileUpload(documentData);
     } catch (err) {
       console.error('Document processing error:', err);

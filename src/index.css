@@ -320,6 +320,59 @@
   box-shadow: 0 2px 4px rgba(245, 158, 11, 0.1);
 }
 
+/* Enhanced empty space highlighting for mutual comparison */
+.word-document-preview .mutual-empty-space {
+  background: #f8fafc;
+  border: 2px dashed #94a3b8;
+  margin: 8px 0;
+  border-radius: 8px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 12px 16px;
+  font-style: italic;
+  color: #64748b;
+  transition: all 0.2s ease;
+}
+
+.word-document-preview .mutual-empty-space:hover {
+  background: #f1f5f9;
+  border-color: #64748b;
+}
+
+.word-document-preview .mutual-empty-space.added {
+  border-color: #22c55e;
+  background-color: #f0fdf4;
+  color: #166534;
+}
+
+.word-document-preview .mutual-empty-space.removed {
+  border-color: #ef4444;
+  background-color: #fef2f2;
+  color: #991b1b;
+}
+
+/* Unified minimap specific styles */
+.unified-minimap {
+  background: linear-gradient(to bottom, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.unified-minimap .change-marker {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.unified-minimap .change-marker:hover {
+  transform: scaleX(1.1);
+  z-index: 10;
+}
+
+.unified-minimap .change-marker.current {
+  transform: scaleX(1.2);
+  z-index: 20;
+  box-shadow: 0 0 0 2px #3b82f6, 0 0 8px rgba(59, 130, 246, 0.4);
+}
 /* Table cell-level highlights */
 .word-document-preview td.cell-added,
 .word-document-preview th.cell-added {
