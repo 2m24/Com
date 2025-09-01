@@ -51,19 +51,19 @@ const DetailedReport = ({ report }) => {
         {tables.length === 0 ? (
           <p className="text-sm text-gray-500">No table changes</p>
         ) : (
-          <ul className="text-sm text-gray-700 space-y-1">
+          <div className="space-y-3">
             {tables.map((t, i) => (
-              <li key={i}>
-                <span className={statusClass(t.status)}>{t.status}</span>
-                {` table ${t.table}`}
-                {t.row ? `, row ${t.row}` : ''}
-                {t.col ? `, col ${t.col}` : ''}
+              <div key={i} className="border border-gray-200 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={statusClass(t.status)}>{t.status}</span>
+                  <span className="text-sm text-gray-600">Table {t.table}</span>
+                </div>
                 {t.diffHtml ? (
                   <div className="word-document-preview" dangerouslySetInnerHTML={{ __html: t.diffHtml }} />
                 ) : null}
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
 
@@ -72,14 +72,16 @@ const DetailedReport = ({ report }) => {
         {images.length === 0 ? (
           <p className="text-sm text-gray-500">No image changes</p>
         ) : (
-          <ul className="text-sm text-gray-700 space-y-1">
+          <div className="space-y-3">
             {images.map((img, i) => (
-              <li key={i}>
-                <span className={statusClass(img.status)}>{img.status}</span>
-                {` image #${img.index || ''}`}
-              </li>
+              <div key={i} className="border border-gray-200 rounded-lg p-3">
+                <div className="flex items-center gap-2">
+                  <span className={statusClass(img.status)}>{img.status}</span>
+                  <span className="text-sm text-gray-600">Image #{img.index || i + 1}</span>
+                </div>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
     </div>

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
+import { ChevronUp, ChevronDown, RotateCcw, Table, Image, FileText } from 'lucide-react';
 
 const CHANGE_SELECTORS = [
   '.git-line-added',
@@ -9,7 +9,13 @@ const CHANGE_SELECTORS = [
   '.git-inline-added',
   '.git-inline-removed',
   '.placeholder-added',
-  '.placeholder-removed'
+  '.placeholder-removed',
+  '.git-table-added',
+  '.git-table-removed',
+  '.git-table-modified',
+  '.git-image-added',
+  '.git-image-removed',
+  '.git-image-modified'
 ];
 
 const UnifiedMiniMap = ({ leftContainerId, rightContainerId }) => {
@@ -42,31 +48,79 @@ const UnifiedMiniMap = ({ leftContainerId, rightContainerId }) => {
         const scrollHeight = Math.max(container.scrollHeight, container.clientHeight);
         const ratio = Math.min(1, Math.max(0, relativeTop / scrollHeight));
         
-        // Determine change type and color
+        // Determine change type, color, and icon
         let color = '#6b7280';
         let changeType = 'unknown';
         let priority = 0;
+        let icon = FileText;
+        let height = '4px';
         
-        if (element.classList.contains('git-line-added') || 
-            element.classList.contains('git-inline-added') ||
-            element.classList.contains('placeholder-added')) {
+        // Table changes
+        if (element.classList.contains('git-table-added')) {
           color = '#10b981';
-          changeType = 'added';
+          changeType = 'table-added';
+          priority = 5;
+          icon = Table;
+          height = '8px';
+        } else if (element.classList.contains('git-table-removed')) {
+          color = '#ef4444';
+          changeType = 'table-removed';
+          priority = 5;
+          icon = Table;
+          height = '8px';
+        } else if (element.classList.contains('git-table-modified')) {
+          color = '#f59e0b';
+          changeType = 'table-modified';
+          priority = 4;
+          icon = Table;
+          height = '8px';
+        }
+        // Image changes
+        else if (element.classList.contains('git-image-added')) {
+          color = '#10b981';
+          changeType = 'image-added';
+          priority = 5;
+          icon = Image;
+          height = '6px';
+        } else if (element.classList.contains('git-image-removed')) {
+          color = '#ef4444';
+          changeType = 'image-removed';
+          priority = 5;
+          icon = Image;
+          height = '6px';
+        } else if (element.classList.contains('git-image-modified')) {
+          color = '#f59e0b';
+          changeType = 'image-modified';
+          priority = 4;
+          icon = Image;
+          height = '6px';
+        }
+        // Text changes
+        else if (element.classList.contains('git-line-added') || 
+                 element.classList.contains('git-inline-added') ||
+                 element.classList.contains('placeholder-added')) {
+          color = '#10b981';
+          changeType = 'text-added';
           priority = 3;
+          icon = FileText;
         } else if (element.classList.contains('git-line-removed') || 
                    element.classList.contains('git-inline-removed') ||
                    element.classList.contains('placeholder-removed')) {
           color = '#ef4444';
-          changeType = 'removed';
+          changeType = 'text-removed';
           priority = 3;
+          icon = FileText;
         } else if (element.classList.contains('git-line-modified')) {
           color = '#f59e0b';
-          changeType = 'modified';
+          changeType = 'text-modified';
           priority = 2;
+          icon = FileText;
         } else if (element.classList.contains('git-line-placeholder')) {
           color = '#8b5cf6';
           changeType = 'empty-space';
           priority = 4;
+          icon = FileText;
+          height = '6px';
         }
 
         allMarkers.push({
@@ -76,7 +130,9 @@ const UnifiedMiniMap = ({ leftContainerId, rightContainerId }) => {
           side,
           element,
           elementTop: relativeTop,
-          priority
+          priority,
+          icon,
+          height
         });
       });
     });
@@ -233,7 +289,7 @@ const UnifiedMiniMap = ({ leftContainerId, rightContainerId }) => {
       updateViewport();
     };
 
-    const initialTimer = setTimeout(refreshAll, 500);
+    const initialTimer = setTimeout(refreshAll, 800);
     
     const { left, right } = getContainers();
     if (!left || !right) return () => clearTimeout(initialTimer);
@@ -244,7 +300,7 @@ const UnifiedMiniMap = ({ leftContainerId, rightContainerId }) => {
 
     const handleContentChange = () => {
       clearTimeout(window.minimapContentTimer);
-      window.minimapContentTimer = setTimeout(refreshAll, 200);
+      window.minimapContentTimer = setTimeout(refreshAll, 300);
     };
 
     left.addEventListener('scroll', handleScroll, { passive: true });
@@ -286,41 +342,52 @@ const UnifiedMiniMap = ({ leftContainerId, rightContainerId }) => {
 
   // Group markers by type for legend
   const markersByType = markers.reduce((acc, marker) => {
-    acc[marker.changeType] = (acc[marker.changeType] || 0) + 1;
+    const baseType = marker.changeType.replace(/-added|-removed|-modified/, '');
+    acc[baseType] = (acc[baseType] || 0) + 1;
     return acc;
   }, {});
+
+  const getChangeTypeDisplay = (type) => {
+    switch (type) {
+      case 'text': return { icon: FileText, label: 'Text Changes' };
+      case 'table': return { icon: Table, label: 'Table Changes' };
+      case 'image': return { icon: Image, label: 'Image Changes' };
+      case 'empty': return { icon: FileText, label: 'Empty Spaces' };
+      default: return { icon: FileText, label: 'Other Changes' };
+    }
+  };
 
   return (
     <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
       {/* Navigation Controls */}
-      <div className="p-3 border-b border-gray-200 bg-gray-50">
+      <div className="p-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
         <div className="flex items-center justify-between">
-          <div className="text-xs font-medium text-gray-600">
-            Unified Changes ({markers.length})
+          <div className="text-xs font-medium text-gray-700">
+            📍 Unified Changes ({markers.length})
           </div>
           <div className="flex items-center gap-1">
             <button
               onClick={navigateToPrevious}
               disabled={markers.length === 0}
-              className="p-1 rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="p-1.5 rounded-md hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
               title="Previous change"
             >
               <ChevronUp className="h-3 w-3" />
             </button>
-            <span className="text-xs text-gray-500 min-w-[40px] text-center">
+            <span className="text-xs text-gray-600 min-w-[45px] text-center font-mono bg-white px-2 py-1 rounded border">
               {markers.length > 0 ? `${currentChange + 1}/${markers.length}` : '0/0'}
             </span>
             <button
               onClick={navigateToNext}
               disabled={markers.length === 0}
-              className="p-1 rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="p-1.5 rounded-md hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
               title="Next change"
             >
               <ChevronDown className="h-3 w-3" />
             </button>
             <button
               onClick={resetView}
-              className="p-1 rounded hover:bg-gray-200 transition-colors ml-1"
+              className="p-1.5 rounded-md hover:bg-white transition-all duration-200 ml-1 shadow-sm"
               title="Reset to top"
             >
               <RotateCcw className="h-3 w-3" />
@@ -330,49 +397,56 @@ const UnifiedMiniMap = ({ leftContainerId, rightContainerId }) => {
       </div>
 
       {/* Unified Minimap */}
-      <div className="p-3">
+      <div className="p-4">
         <div 
           ref={minimapRef}
           onClick={handleMinimapClick}
-          className="relative w-full h-48 bg-gradient-to-b from-gray-50 to-gray-100 rounded-lg border-2 border-gray-200 cursor-pointer overflow-hidden transition-all duration-200 hover:border-blue-300 hover:shadow-md"
+          className="relative w-full h-56 bg-gradient-to-b from-gray-50 via-white to-gray-50 rounded-lg border-2 border-gray-200 cursor-pointer overflow-hidden transition-all duration-200 hover:border-blue-300 hover:shadow-lg"
           title="Unified document changes • Click to navigate"
         >
           {/* Background grid */}
-          <div className="absolute inset-0 opacity-30 pointer-events-none">
-            {[...Array(8)].map((_, i) => (
+          <div className="absolute inset-0 opacity-20 pointer-events-none">
+            {[...Array(10)].map((_, i) => (
               <div 
                 key={i}
                 className="absolute left-0 right-0 border-t border-gray-300"
-                style={{ top: `${(i + 1) * 12.5}%` }}
+                style={{ top: `${(i + 1) * 10}%` }}
               />
             ))}
           </div>
           
           {/* Unified change markers */}
-          {markers.map((marker, i) => (
-            <div 
-              key={`unified-${i}`}
-              className={`absolute transition-all duration-200 hover:scale-110 cursor-pointer z-20 rounded-sm ${
-                i === currentChange ? 'ring-2 ring-blue-500 ring-offset-1' : ''
-              }`}
-              style={{ 
-                left: '4px',
-                right: '4px',
-                top: `${marker.ratio * 100}%`, 
-                height: marker.changeType === 'empty-space' ? '6px' : '4px',
-                backgroundColor: marker.color,
-                opacity: 0.85,
-                boxShadow: `0 1px 3px ${marker.color}40`
-              }}
-              title={`${marker.changeType} change - click to navigate`}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                scrollToElement(marker.elements);
-                setCurrentChange(i);
-              }}
-            />
-          ))}
+          {markers.map((marker, i) => {
+            const IconComponent = marker.icon;
+            return (
+              <div 
+                key={`unified-${i}`}
+                className={`absolute transition-all duration-200 hover:scale-110 cursor-pointer z-20 rounded-sm flex items-center justify-center ${
+                  i === currentChange ? 'ring-2 ring-blue-500 ring-offset-1 scale-110' : ''
+                }`}
+                style={{ 
+                  left: '6px',
+                  right: '6px',
+                  top: `${marker.ratio * 100}%`, 
+                  height: marker.height,
+                  backgroundColor: marker.color,
+                  opacity: 0.9,
+                  boxShadow: `0 2px 4px ${marker.color}40, 0 1px 2px ${marker.color}60`
+                }}
+                title={`${marker.changeType.replace(/-/g, ' ')} - click to navigate`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  scrollToElement(marker.elements);
+                  setCurrentChange(i);
+                }}
+              >
+                {marker.height === '8px' && (
+                  <IconComponent className="h-2 w-2 text-white" style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.3))' }} />
+                )}
+              </div>
+            );
+          })}
           
           {/* Viewport indicator */}
           <div
@@ -387,7 +461,8 @@ const UnifiedMiniMap = ({ leftContainerId, rightContainerId }) => {
           {/* No changes message */}
           {markers.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
-              <div className="text-xs text-gray-400 text-center bg-white/80 px-3 py-2 rounded-lg">
+              <div className="text-xs text-gray-400 text-center bg-white/90 px-4 py-3 rounded-lg border border-gray-200 shadow-sm">
+                <FileText className="h-4 w-4 mx-auto mb-1 opacity-50" />
                 No changes detected
               </div>
             </div>
@@ -395,34 +470,27 @@ const UnifiedMiniMap = ({ leftContainerId, rightContainerId }) => {
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="p-3 border-t border-gray-200 bg-gray-50">
-        <div className="text-xs font-medium text-gray-600 mb-2">Change Types</div>
+      {/* Enhanced Legend */}
+      <div className="p-4 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-blue-50">
+        <div className="text-xs font-medium text-gray-700 mb-3">📊 Change Types</div>
         <div className="grid grid-cols-2 gap-2 text-xs">
-          {markersByType.added > 0 && (
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-2 bg-green-500 rounded-sm"></div>
-              <span className="text-gray-600">Added ({markersByType.added})</span>
-            </div>
-          )}
-          {markersByType.removed > 0 && (
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-2 bg-red-500 rounded-sm"></div>
-              <span className="text-gray-600">Removed ({markersByType.removed})</span>
-            </div>
-          )}
-          {markersByType.modified > 0 && (
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-2 bg-yellow-500 rounded-sm"></div>
-              <span className="text-gray-600">Modified ({markersByType.modified})</span>
-            </div>
-          )}
-          {markersByType['empty-space'] > 0 && (
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-2 bg-purple-500 rounded-sm"></div>
-              <span className="text-gray-600">Empty Space ({markersByType['empty-space']})</span>
-            </div>
-          )}
+          {Object.entries(markersByType).map(([type, count]) => {
+            const { icon: IconComponent, label } = getChangeTypeDisplay(type);
+            return (
+              <div key={type} className="flex items-center gap-2 bg-white px-2 py-1 rounded border">
+                <IconComponent className="h-3 w-3 text-gray-500" />
+                <span className="text-gray-600">{label} ({count})</span>
+              </div>
+            );
+          })}
+        </div>
+        
+        {/* Mutual comparison explanation */}
+        <div className="mt-3 p-2 bg-blue-50 rounded border border-blue-200">
+          <div className="text-xs text-blue-700">
+            <strong>🔄 Mutual Comparison:</strong> Both documents show all changes. 
+            Empty spaces indicate where content exists in one document but not the other.
+          </div>
         </div>
       </div>
     </div>

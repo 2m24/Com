@@ -1,4 +1,4 @@
-import { diffChars, diffWordsWithSpace, diffArrays, diffSentences } from "diff";
+import { diffChars, diffWordsWithSpace } from "diff";
 import { diff_match_patch } from 'diff-match-patch';
 
 export const compareDocuments = (leftText, rightText) => {
@@ -24,12 +24,12 @@ export const compareDocuments = (leftText, rightText) => {
   return { leftDiffs, rightDiffs, summary };
 };
 
-export const compareHtmlDocuments = (leftHtml, rightHtml) => {
+export const compareHtmlDocuments = async (leftHtml, rightHtml) => {
   return new Promise((resolve) => {
-    // Use setTimeout to prevent browser blocking
-    setTimeout(() => {
+    // Use requestIdleCallback for better performance
+    const performComparison = () => {
       try {
-        console.log('Starting optimized document comparison...');
+        console.log('Starting optimized mutual document comparison...');
         
         // Quick text comparison first
         const leftText = extractPlainText(leftHtml);
@@ -48,8 +48,8 @@ export const compareHtmlDocuments = (leftHtml, rightHtml) => {
 
         console.log('Documents differ, performing mutual comparison...');
         
-        // Perform mutual comparison with chunked processing
-        const result = performMutualComparison(leftHtml, rightHtml);
+        // Perform optimized mutual comparison
+        const result = performOptimizedMutualComparison(leftHtml, rightHtml);
         console.log('Comparison completed successfully');
         resolve(result);
         
@@ -62,29 +62,36 @@ export const compareHtmlDocuments = (leftHtml, rightHtml) => {
           detailed: { lines: [], tables: [], images: [] },
         });
       }
-    }, 10);
+    };
+
+    // Use requestIdleCallback if available, otherwise setTimeout
+    if (window.requestIdleCallback) {
+      window.requestIdleCallback(performComparison, { timeout: 1000 });
+    } else {
+      setTimeout(performComparison, 0);
+    }
   });
 };
 
-// Optimized mutual comparison
-const performMutualComparison = (leftHtml, rightHtml) => {
+// Optimized mutual comparison that handles tables and images
+const performOptimizedMutualComparison = (leftHtml, rightHtml) => {
   const leftDiv = htmlToDiv(leftHtml);
   const rightDiv = htmlToDiv(rightHtml);
 
-  // Extract lines from both documents
-  const leftLines = extractDocumentLines(leftDiv);
-  const rightLines = extractDocumentLines(rightDiv);
+  // Extract all content elements including tables and images
+  const leftElements = extractAllElements(leftDiv);
+  const rightElements = extractAllElements(rightDiv);
 
-  console.log(`Comparing ${leftLines.length} vs ${rightLines.length} lines`);
+  console.log(`Comparing ${leftElements.length} vs ${rightElements.length} elements`);
 
-  // Perform line-by-line mutual comparison
-  const { leftProcessed, rightProcessed, summary } = performLineMutualComparison(leftLines, rightLines);
+  // Perform mutual comparison with tables and images
+  const { leftProcessed, rightProcessed, summary } = performMutualElementComparison(leftElements, rightElements);
 
   // Apply the processed content back to the divs
-  applyProcessedLinesToDiv(leftDiv, leftProcessed);
-  applyProcessedLinesToDiv(rightDiv, rightProcessed);
+  applyProcessedElementsToDiv(leftDiv, leftProcessed);
+  applyProcessedElementsToDiv(rightDiv, rightProcessed);
 
-  const detailed = generateSimpleDetailedReport(leftLines, rightLines);
+  const detailed = generateDetailedReport(leftElements, rightElements);
 
   return {
     leftDiffs: [{ type: "equal", content: leftDiv.innerHTML }],
@@ -94,115 +101,172 @@ const performMutualComparison = (leftHtml, rightHtml) => {
   };
 };
 
-// Extract lines with their elements for processing
-const extractDocumentLines = (container) => {
-  const lines = [];
-  const elements = container.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, div');
+// Extract all elements including paragraphs, headings, tables, and images
+const extractAllElements = (container) => {
+  const elements = [];
+  const allNodes = container.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, table, img, div');
   
-  elements.forEach((element, index) => {
-    // Skip nested elements and tables
-    if (element.closest('table') || element.querySelector('p, h1, h2, h3, h4, h5, h6, li')) {
-      return;
+  allNodes.forEach((element, index) => {
+    // Skip nested elements (except for tables and images which are standalone)
+    if (element.tagName === 'TABLE' || element.tagName === 'IMG') {
+      // Always include tables and images
+      const text = element.tagName === 'TABLE' ? extractTableText(element) : (element.alt || `Image ${index + 1}`);
+      elements.push({
+        element,
+        text,
+        html: element.outerHTML,
+        index,
+        tagName: element.tagName.toLowerCase(),
+        isEmpty: !text.trim(),
+        isTable: element.tagName === 'TABLE',
+        isImage: element.tagName === 'IMG'
+      });
+    } else if (!element.closest('table') && !element.querySelector('p, h1, h2, h3, h4, h5, h6, li, table, img')) {
+      // Include text elements that aren't nested
+      const text = (element.textContent || '').trim();
+      elements.push({
+        element,
+        text,
+        html: element.innerHTML || '',
+        index,
+        tagName: element.tagName.toLowerCase(),
+        isEmpty: !text,
+        isTable: false,
+        isImage: false
+      });
     }
-    
-    const text = (element.textContent || '').trim();
-    const html = element.innerHTML || '';
-    
-    lines.push({
-      element,
-      text,
-      html,
-      index,
-      tagName: element.tagName.toLowerCase(),
-      isEmpty: !text
-    });
   });
   
-  return lines;
+  return elements;
 };
 
-// Perform mutual line comparison with empty space highlighting
-const performLineMutualComparison = (leftLines, rightLines) => {
+// Extract text from table while preserving structure
+const extractTableText = (table) => {
+  const rows = table.querySelectorAll('tr');
+  return Array.from(rows).map(row => {
+    const cells = row.querySelectorAll('td, th');
+    return Array.from(cells).map(cell => cell.textContent?.trim() || '').join(' | ');
+  }).join('\n');
+};
+
+// Perform mutual element comparison including tables and images
+const performMutualElementComparison = (leftElements, rightElements) => {
   const leftProcessed = [];
   const rightProcessed = [];
   let additions = 0, deletions = 0;
 
-  // Create alignment between lines
-  const maxLines = Math.max(leftLines.length, rightLines.length);
+  // Create alignment between elements
+  const maxElements = Math.max(leftElements.length, rightElements.length);
   
-  for (let i = 0; i < maxLines; i++) {
-    const leftLine = leftLines[i];
-    const rightLine = rightLines[i];
+  for (let i = 0; i < maxElements; i++) {
+    const leftElement = leftElements[i];
+    const rightElement = rightElements[i];
     
-    if (leftLine && rightLine) {
-      // Both lines exist - compare content
-      if (leftLine.isEmpty && rightLine.isEmpty) {
+    if (leftElement && rightElement) {
+      // Both elements exist - compare based on type
+      if (leftElement.isTable && rightElement.isTable) {
+        // Compare tables
+        const tablesEqual = compareTableContent(leftElement.element, rightElement.element);
+        if (tablesEqual) {
+          leftProcessed.push({ ...leftElement, highlight: 'none' });
+          rightProcessed.push({ ...rightElement, highlight: 'none' });
+        } else {
+          leftProcessed.push({ ...leftElement, highlight: 'modified' });
+          rightProcessed.push({ ...rightElement, highlight: 'modified' });
+          additions++;
+          deletions++;
+        }
+      } else if (leftElement.isImage && rightElement.isImage) {
+        // Compare images
+        const imagesEqual = leftElement.element.src === rightElement.element.src && 
+                           leftElement.element.alt === rightElement.element.alt;
+        if (imagesEqual) {
+          leftProcessed.push({ ...leftElement, highlight: 'none' });
+          rightProcessed.push({ ...rightElement, highlight: 'none' });
+        } else {
+          leftProcessed.push({ ...leftElement, highlight: 'modified' });
+          rightProcessed.push({ ...rightElement, highlight: 'modified' });
+          additions++;
+          deletions++;
+        }
+      } else if (leftElement.isEmpty && rightElement.isEmpty) {
         // Both empty - no highlighting
-        leftProcessed.push({ ...leftLine, highlight: 'none' });
-        rightProcessed.push({ ...rightLine, highlight: 'none' });
-      } else if (leftLine.isEmpty && !rightLine.isEmpty) {
+        leftProcessed.push({ ...leftElement, highlight: 'none' });
+        rightProcessed.push({ ...rightElement, highlight: 'none' });
+      } else if (leftElement.isEmpty && !rightElement.isEmpty) {
         // Left empty, right has content - show as addition
         leftProcessed.push({ 
-          ...leftLine, 
+          ...leftElement, 
           highlight: 'empty-space-added',
-          placeholderText: rightLine.text 
+          placeholderText: rightElement.text,
+          placeholderType: rightElement.isTable ? 'table' : rightElement.isImage ? 'image' : 'text'
         });
-        rightProcessed.push({ ...rightLine, highlight: 'added' });
+        rightProcessed.push({ ...rightElement, highlight: 'added' });
         additions++;
-      } else if (!leftLine.isEmpty && rightLine.isEmpty) {
+      } else if (!leftElement.isEmpty && rightElement.isEmpty) {
         // Left has content, right empty - show as deletion
-        leftProcessed.push({ ...leftLine, highlight: 'removed' });
+        leftProcessed.push({ ...leftElement, highlight: 'removed' });
         rightProcessed.push({ 
-          ...rightLine, 
+          ...rightElement, 
           highlight: 'empty-space-removed',
-          placeholderText: leftLine.text 
+          placeholderText: leftElement.text,
+          placeholderType: leftElement.isTable ? 'table' : leftElement.isImage ? 'image' : 'text'
         });
         deletions++;
-      } else if (areTextsEqual(leftLine.text, rightLine.text)) {
+      } else if (areElementsEqual(leftElement, rightElement)) {
         // Same content - no highlighting
-        leftProcessed.push({ ...leftLine, highlight: 'none' });
-        rightProcessed.push({ ...rightLine, highlight: 'none' });
+        leftProcessed.push({ ...leftElement, highlight: 'none' });
+        rightProcessed.push({ ...rightElement, highlight: 'none' });
       } else {
-        // Different content - show as modified with word-level diff
-        const { leftHighlighted, rightHighlighted } = performWordLevelDiff(leftLine.html, rightLine.html);
-        leftProcessed.push({ 
-          ...leftLine, 
-          highlight: 'modified',
-          processedHtml: leftHighlighted 
-        });
-        rightProcessed.push({ 
-          ...rightLine, 
-          highlight: 'modified',
-          processedHtml: rightHighlighted 
-        });
+        // Different content - show as modified with detailed diff
+        if (leftElement.isTable || rightElement.isTable || leftElement.isImage || rightElement.isImage) {
+          // Structural difference
+          leftProcessed.push({ ...leftElement, highlight: 'modified' });
+          rightProcessed.push({ ...rightElement, highlight: 'modified' });
+        } else {
+          // Text difference - perform word-level diff
+          const { leftHighlighted, rightHighlighted } = performWordLevelDiff(leftElement.html, rightElement.html);
+          leftProcessed.push({ 
+            ...leftElement, 
+            highlight: 'modified',
+            processedHtml: leftHighlighted 
+          });
+          rightProcessed.push({ 
+            ...rightElement, 
+            highlight: 'modified',
+            processedHtml: rightHighlighted 
+          });
+        }
         additions++;
         deletions++;
       }
-    } else if (leftLine && !rightLine) {
-      // Only left line exists - show as removed
-      leftProcessed.push({ ...leftLine, highlight: 'removed' });
+    } else if (leftElement && !rightElement) {
+      // Only left element exists - show as removed
+      leftProcessed.push({ ...leftElement, highlight: 'removed' });
       rightProcessed.push({ 
         element: null, 
         text: '', 
         html: '', 
         isEmpty: true, 
         highlight: 'empty-space-removed',
-        placeholderText: leftLine.text,
-        tagName: leftLine.tagName 
+        placeholderText: leftElement.text,
+        placeholderType: leftElement.isTable ? 'table' : leftElement.isImage ? 'image' : 'text',
+        tagName: leftElement.tagName 
       });
       deletions++;
-    } else if (!leftLine && rightLine) {
-      // Only right line exists - show as added
+    } else if (!leftElement && rightElement) {
+      // Only right element exists - show as added
       leftProcessed.push({ 
         element: null, 
         text: '', 
         html: '', 
         isEmpty: true, 
         highlight: 'empty-space-added',
-        placeholderText: rightLine.text,
-        tagName: rightLine.tagName 
+        placeholderText: rightElement.text,
+        placeholderType: rightElement.isTable ? 'table' : rightElement.isImage ? 'image' : 'text',
+        tagName: rightElement.tagName 
       });
-      rightProcessed.push({ ...rightLine, highlight: 'added' });
+      rightProcessed.push({ ...rightElement, highlight: 'added' });
       additions++;
     }
   }
@@ -214,49 +278,86 @@ const performLineMutualComparison = (leftLines, rightLines) => {
   };
 };
 
-// Apply processed lines back to the document
-const applyProcessedLinesToDiv = (container, processedLines) => {
+// Compare table content for equality
+const compareTableContent = (table1, table2) => {
+  const text1 = extractTableText(table1);
+  const text2 = extractTableText(table2);
+  return text1 === text2;
+};
+
+// Check if elements are equal
+const areElementsEqual = (element1, element2) => {
+  if (element1.isTable && element2.isTable) {
+    return compareTableContent(element1.element, element2.element);
+  }
+  if (element1.isImage && element2.isImage) {
+    return element1.element.src === element2.element.src && 
+           element1.element.alt === element2.element.alt;
+  }
+  return areTextsEqual(element1.text, element2.text);
+};
+
+// Apply processed elements back to the document
+const applyProcessedElementsToDiv = (container, processedElements) => {
   // Clear existing content
   container.innerHTML = '';
   
-  processedLines.forEach(line => {
-    let element;
+  processedElements.forEach(element => {
+    let newElement;
     
-    if (line.element) {
+    if (element.element) {
       // Use existing element
-      element = line.element.cloneNode(false);
+      newElement = element.element.cloneNode(true);
     } else {
-      // Create new element for placeholder
-      element = document.createElement(line.tagName || 'p');
+      // Create placeholder element
+      if (element.placeholderType === 'table') {
+        newElement = document.createElement('div');
+        newElement.className = 'table-placeholder';
+      } else if (element.placeholderType === 'image') {
+        newElement = document.createElement('div');
+        newElement.className = 'image-placeholder';
+      } else {
+        newElement = document.createElement(element.tagName || 'p');
+      }
     }
     
     // Apply highlighting classes
-    switch (line.highlight) {
+    switch (element.highlight) {
       case 'added':
-        element.classList.add('git-line-added');
-        element.innerHTML = line.processedHtml || line.html;
+        newElement.classList.add('git-line-added');
+        if (element.isTable) newElement.classList.add('git-table-added');
+        if (element.isImage) newElement.classList.add('git-image-added');
+        if (element.processedHtml) newElement.innerHTML = element.processedHtml;
         break;
       case 'removed':
-        element.classList.add('git-line-removed');
-        element.innerHTML = line.processedHtml || line.html;
+        newElement.classList.add('git-line-removed');
+        if (element.isTable) newElement.classList.add('git-table-removed');
+        if (element.isImage) newElement.classList.add('git-image-removed');
+        if (element.processedHtml) newElement.innerHTML = element.processedHtml;
         break;
       case 'modified':
-        element.classList.add('git-line-modified');
-        element.innerHTML = line.processedHtml || line.html;
+        newElement.classList.add('git-line-modified');
+        if (element.isTable) newElement.classList.add('git-table-modified');
+        if (element.isImage) newElement.classList.add('git-image-modified');
+        if (element.processedHtml) newElement.innerHTML = element.processedHtml;
         break;
       case 'empty-space-added':
-        element.classList.add('git-line-placeholder', 'placeholder-added');
-        element.innerHTML = `<span style="color: #166534; font-style: italic; opacity: 0.8;">[Empty space - content added: "${line.placeholderText?.substring(0, 50)}${line.placeholderText?.length > 50 ? '...' : ''}"]</span>`;
+        newElement.classList.add('git-line-placeholder', 'placeholder-added');
+        const addedIcon = element.placeholderType === 'table' ? '📊' : element.placeholderType === 'image' ? '🖼️' : '📝';
+        newElement.innerHTML = `<span style="color: #166534; font-style: italic; opacity: 0.8;">${addedIcon} [Empty space - ${element.placeholderType} added: "${element.placeholderText?.substring(0, 50)}${element.placeholderText?.length > 50 ? '...' : ''}"]</span>`;
         break;
       case 'empty-space-removed':
-        element.classList.add('git-line-placeholder', 'placeholder-removed');
-        element.innerHTML = `<span style="color: #991b1b; font-style: italic; opacity: 0.8;">[Empty space - content removed: "${line.placeholderText?.substring(0, 50)}${line.placeholderText?.length > 50 ? '...' : ''}"]</span>`;
+        newElement.classList.add('git-line-placeholder', 'placeholder-removed');
+        const removedIcon = element.placeholderType === 'table' ? '📊' : element.placeholderType === 'image' ? '🖼️' : '📝';
+        newElement.innerHTML = `<span style="color: #991b1b; font-style: italic; opacity: 0.8;">${removedIcon} [Empty space - ${element.placeholderType} removed: "${element.placeholderText?.substring(0, 50)}${element.placeholderText?.length > 50 ? '...' : ''}"]</span>`;
         break;
       default:
-        element.innerHTML = line.processedHtml || line.html;
+        if (element.processedHtml) {
+          newElement.innerHTML = element.processedHtml;
+        }
     }
     
-    container.appendChild(element);
+    container.appendChild(newElement);
   });
 };
 
@@ -306,25 +407,6 @@ const applyDiffHighlighting = (diffs, side) => {
 };
 
 // Text similarity and equality functions
-const getTextSimilarity = (text1, text2) => {
-  if (!text1 && !text2) return 1;
-  if (!text1 || !text2) return 0;
-  
-  const dmp = new diff_match_patch();
-  const diffs = dmp.diff_main(text1, text2);
-  
-  let totalLength = Math.max(text1.length, text2.length);
-  let unchangedLength = 0;
-  
-  diffs.forEach(diff => {
-    if (diff[0] === 0) {
-      unchangedLength += diff[1].length;
-    }
-  });
-  
-  return totalLength > 0 ? unchangedLength / totalLength : 0;
-};
-
 const areTextsEqual = (text1, text2) => {
   const normalize = (text) => text.trim().replace(/\s+/g, ' ').toLowerCase();
   return normalize(text1) === normalize(text2);
@@ -384,55 +466,101 @@ const escapeHtml = (text) => {
   return div.innerHTML;
 };
 
-// Simplified detailed report generation
-export const generateSimpleDetailedReport = (leftLines, rightLines) => {
+// Generate detailed report including tables and images
+const generateDetailedReport = (leftElements, rightElements) => {
   try {
     const lines = [];
-    const maxLines = Math.max(leftLines.length, rightLines.length);
+    const tables = [];
+    const images = [];
+    const maxElements = Math.max(leftElements.length, rightElements.length);
     
-    for (let i = 0; i < maxLines; i++) {
-      const leftLine = leftLines[i];
-      const rightLine = rightLines[i];
+    for (let i = 0; i < maxElements; i++) {
+      const leftElement = leftElements[i];
+      const rightElement = rightElements[i];
       
-      if (leftLine && rightLine) {
-        if (areTextsEqual(leftLine.text, rightLine.text)) {
-          lines.push({
-            v1: String(i + 1),
-            v2: String(i + 1),
-            status: "UNCHANGED",
-            diffHtml: escapeHtml(leftLine.text),
-            formatChanges: []
+      if (leftElement?.isTable || rightElement?.isTable) {
+        // Handle table comparison
+        if (leftElement?.isTable && rightElement?.isTable) {
+          const tablesEqual = compareTableContent(leftElement.element, rightElement.element);
+          tables.push({
+            table: i + 1,
+            status: tablesEqual ? "UNCHANGED" : "MODIFIED",
+            diffHtml: tablesEqual ? escapeHtml(leftElement.text) : createInlineDiff(leftElement.text, rightElement.text)
           });
-        } else {
-          const diffHtml = createInlineDiff(leftLine.text, rightLine.text);
-          lines.push({
-            v1: String(i + 1),
-            v2: String(i + 1),
-            status: "MODIFIED",
-            diffHtml,
-            formatChanges: ["Content modified"]
+        } else if (leftElement?.isTable && !rightElement?.isTable) {
+          tables.push({
+            table: i + 1,
+            status: "REMOVED",
+            diffHtml: `<span class="git-inline-removed">${escapeHtml(leftElement.text)}</span>`
+          });
+        } else if (!leftElement?.isTable && rightElement?.isTable) {
+          tables.push({
+            table: i + 1,
+            status: "ADDED",
+            diffHtml: `<span class="git-inline-added">${escapeHtml(rightElement.text)}</span>`
           });
         }
-      } else if (leftLine && !rightLine) {
-        lines.push({
-          v1: String(i + 1),
-          v2: "",
-          status: "REMOVED",
-          diffHtml: `<span class="git-inline-removed">${escapeHtml(leftLine.text)}</span>`,
-          formatChanges: ["Line removed"]
-        });
-      } else if (!leftLine && rightLine) {
-        lines.push({
-          v1: "",
-          v2: String(i + 1),
-          status: "ADDED",
-          diffHtml: `<span class="git-inline-added">${escapeHtml(rightLine.text)}</span>`,
-          formatChanges: ["Line added"]
-        });
+      } else if (leftElement?.isImage || rightElement?.isImage) {
+        // Handle image comparison
+        if (leftElement?.isImage && rightElement?.isImage) {
+          const imagesEqual = leftElement.element.src === rightElement.element.src;
+          images.push({
+            index: i + 1,
+            status: imagesEqual ? "UNCHANGED" : "MODIFIED"
+          });
+        } else if (leftElement?.isImage && !rightElement?.isImage) {
+          images.push({
+            index: i + 1,
+            status: "REMOVED"
+          });
+        } else if (!leftElement?.isImage && rightElement?.isImage) {
+          images.push({
+            index: i + 1,
+            status: "ADDED"
+          });
+        }
+      } else {
+        // Handle text comparison
+        if (leftElement && rightElement) {
+          if (areTextsEqual(leftElement.text, rightElement.text)) {
+            lines.push({
+              v1: String(i + 1),
+              v2: String(i + 1),
+              status: "UNCHANGED",
+              diffHtml: escapeHtml(leftElement.text),
+              formatChanges: []
+            });
+          } else {
+            const diffHtml = createInlineDiff(leftElement.text, rightElement.text);
+            lines.push({
+              v1: String(i + 1),
+              v2: String(i + 1),
+              status: "MODIFIED",
+              diffHtml,
+              formatChanges: ["Content modified"]
+            });
+          }
+        } else if (leftElement && !rightElement) {
+          lines.push({
+            v1: String(i + 1),
+            v2: "",
+            status: "REMOVED",
+            diffHtml: `<span class="git-inline-removed">${escapeHtml(leftElement.text)}</span>`,
+            formatChanges: ["Line removed"]
+          });
+        } else if (!leftElement && rightElement) {
+          lines.push({
+            v1: "",
+            v2: String(i + 1),
+            status: "ADDED",
+            diffHtml: `<span class="git-inline-added">${escapeHtml(rightElement.text)}</span>`,
+            formatChanges: ["Line added"]
+          });
+        }
       }
     }
 
-    return { lines, tables: [], images: [] };
+    return { lines, tables, images };
   } catch (error) {
     console.error('Error generating detailed report:', error);
     return { lines: [], tables: [], images: [] };
